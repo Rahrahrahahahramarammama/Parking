@@ -1,0 +1,33 @@
+# Bytecode und Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Bilddateien (Kameradaten, Sampledaten, Outputs)
+*.jpg
+*.jpeg
+*.png
+*.bmp
+
+# Modelle und große Binärdateien
+*.pt
+*.zip
+
+# SQLite Datenbank
+*.db
+
+# Virtuelle Umgebungen
+.venv/
+env/
+venv/
+
+# VS Code & PlatformIO
+.vscode/
+.pio/
+
+# Logfiles
+*.log
+
+# Sonstiges
+.DS_Store
+.idea/
