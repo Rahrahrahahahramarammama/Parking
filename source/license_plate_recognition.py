@@ -4,7 +4,7 @@ import easyocr
 import re
 import sqlite3
 from Levenshtein import distance as levenshtein_distance
-from database import (
+from source.database import (
     auto_add_user_license_plate,
     get_all_license_plates,
     create_tables
@@ -12,7 +12,7 @@ from database import (
 
 # Einmalige Initialisierung von Modellen
 reader = easyocr.Reader(['en'], gpu=False)
-model = YOLO(r'C:\Users\Emir1\OneDrive\Dokumente\PlatformIO\Projects\PARKING_MATURA_PROJ\license_plate_detector.pt')
+model = YOLO(r'C:\Users\Emir1\OneDrive\Dokumente\PlatformIO\Projects\PARKING_MATURA_PROJ\source\license_plate_detector.pt')
 
 DB_NAME = 'smartpark.db'
 
