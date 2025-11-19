@@ -1,32 +1,31 @@
-# Bytecode und Cache
+# Machine Learning Modelle
+*.pt
+
+# Datenbankdateien
+*.db
+
+# Bild- und Logdateien
+*.png
+*.jpg
+*.jpeg
+*.log
+
+# Python Bytecode und Cache
 __pycache__/
 *.pyc
 *.pyo
 
-# Bilddateien (Kameradaten, Sampledaten, Outputs)
-*.jpg
-*.jpeg
-*.png
-*.bmp
-
-# Modelle und große Binärdateien
-*.zip
-
-# SQLite Datenbank
-*.db
-
-# Virtuelle Umgebungen
+# Virtuelle Umgebungen (falls benutzt)
 .venv/
 env/
 venv/
 
-# VS Code & PlatformIO
+# VS Code-Einstellungen und Projekt-Ordner
 .vscode/
+
+# PlatformIO/Arduino (falls genutzt)
 .pio/
 
-# Logfiles
-*.log
-
-# Sonstiges
+# IDE- und Systemdateien
 .DS_Store
 .idea/
