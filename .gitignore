@@ -10,7 +10,6 @@ __pycache__/
 *.bmp
 
 # Modelle und große Binärdateien
-*.pt
 *.zip
 
 # SQLite Datenbank
