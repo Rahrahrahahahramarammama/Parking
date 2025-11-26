@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import cv2
@@ -14,8 +15,9 @@ from backend.database import (
     get_all_license_plates,
     create_tables
 )
+from backend.camera_module import Camera
+from backend.display_control import show_access, setup_leds, cleanup_leds
 
-# Modellpfad (liegt im Projekt-Hauptordner)
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'license_plate_detector.pt'))
 reader = easyocr.Reader(['en'], gpu=False)
 model = YOLO(model_path)
@@ -69,6 +71,7 @@ def recognize_license_plate(img, show_debug=False):
     if len(results) == 0 or results[0].boxes is None or len(results[0].boxes) == 0:
         if show_debug:
             print("Keine Kennzeichen erkannt.")
+            show_access("unknown")
         return
 
     for idx, result in enumerate(results):
@@ -100,26 +103,32 @@ def recognize_license_plate(img, show_debug=False):
                 print(f"Final erkanntes Kennzeichen: {final_plate}")
                 print("="*40)
                 auto_add_user_license_plate(final_plate)
+                # Status in DB prüfen (vereinfachtes Bsp: Zugelassen = schon in DB)
+                zugelassen = True  # Passe dies nach DB-Logik an!
+                show_access("allowed" if zugelassen else "denied", final_plate)
             else:
                 if show_debug:
                     print("Kein plausibles Kennzeichen erkannt.")
+                show_access("denied", text)
     if show_debug:
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     create_tables()
-    cap = cv2.VideoCapture(0)  # Kamera initialisieren
+    setup_leds()
+    camera = Camera()
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret:
+            frame = camera.get_frame()
+            if frame is None:
                 print("Kamera-Frame konnte nicht gelesen werden")
                 break
             recognize_license_plate(frame, show_debug=True)
             cv2.imshow("Live Kamera", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-            time.sleep(1)  # prüft nur alle 1 Sekunde
+            time.sleep(1)
     finally:
-        cap.release()
+        cleanup_leds()
+        camera.release()
         cv2.destroyAllWindows()
