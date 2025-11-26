@@ -1,20 +1,24 @@
+import sys
+import os
+import time
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import cv2
 from ultralytics import YOLO
 import easyocr
 import re
-import sqlite3
 from Levenshtein import distance as levenshtein_distance
+
 from backend.database import (
     auto_add_user_license_plate,
     get_all_license_plates,
     create_tables
 )
 
-# Einmalige Initialisierung von Modellen
+# Modellpfad (liegt im Projekt-Hauptordner)
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'license_plate_detector.pt'))
 reader = easyocr.Reader(['en'], gpu=False)
-model = YOLO(r'C:\Users\Emir1\OneDrive\Dokumente\PlatformIO\Projects\PARKING_MATURA_PROJ\source\license_plate_detector.pt')
-
-DB_NAME = 'smartpark.db'
+model = YOLO(model_path)
 
 def crop_eu_blue_strip(plate_img, ratio=0.15):
     h, w = plate_img.shape[:2]
@@ -62,7 +66,6 @@ def find_similar_plate_in_db(plate, max_distance=1):
 
 def recognize_license_plate(img, show_debug=False):
     results = model(img)
-
     if len(results) == 0 or results[0].boxes is None or len(results[0].boxes) == 0:
         if show_debug:
             print("Keine Kennzeichen erkannt.")
@@ -72,7 +75,6 @@ def recognize_license_plate(img, show_debug=False):
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             plate_img = img[y1:y2, x1:x2]
-
             if show_debug:
                 cv2.imshow('YOLO ROI', plate_img)
                 cv2.waitKey(1)
@@ -80,14 +82,12 @@ def recognize_license_plate(img, show_debug=False):
             plate_img_no_blue = crop_eu_blue_strip(plate_img)
             plate_img_scaled = scale_plate(plate_img_no_blue)
             plate_img_processed = preprocess_for_ocr(plate_img_scaled)
-
             if show_debug:
                 cv2.imshow('Vorverarbeitet', plate_img_processed)
                 cv2.waitKey(1)
 
             text = ocr_easyocr_only(plate_img_processed)
             text = trim_ghost_endings(text)
-
             final_plate = text
             if plausible_plate(final_plate):
                 similar_plate = find_similar_plate_in_db(final_plate, max_distance=1)
@@ -103,27 +103,23 @@ def recognize_license_plate(img, show_debug=False):
             else:
                 if show_debug:
                     print("Kein plausibles Kennzeichen erkannt.")
-
     if show_debug:
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     create_tables()
     cap = cv2.VideoCapture(0)  # Kamera initialisieren
-
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
                 print("Kamera-Frame konnte nicht gelesen werden")
                 break
-
             recognize_license_plate(frame, show_debug=True)
-
-            # Optional: Ausgabe
             cv2.imshow("Live Kamera", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+            time.sleep(1)  # prüft nur alle 1 Sekunde
     finally:
         cap.release()
         cv2.destroyAllWindows()
