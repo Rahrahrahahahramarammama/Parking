@@ -1,22 +1,34 @@
-from flask import Flask, render_template_string, request, redirect, send_from_directory
 import os
+import sys
+from flask import Flask, render_template_string, request, redirect, send_from_directory
+from datetime import datetime
+
+# ----- Projektpfad richtig setzen -----
+# BASE_DIR = .../Parking/frontend
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# ROOT_DIR = .../Parking
+ROOT_DIR = os.path.dirname(BASE_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+from backend.status import state  # gemeinsamer Status
 
 app = Flask(__name__)
 
-zufahrt_erlaubt = True
-letztes_kennzeichen = ""
-log = []
+# einfache Whitelist – kannst du später mit eurer DB verknüpfen
 erlaubte_kennzeichen = {"ABC1234", "XYZ9876"}
-from datetime import datetime
+
 
 def led_html():
-    color = "#46fa5a" if zufahrt_erlaubt else "#fa4646"
+    color = "#46fa5a" if state.zufahrt_erlaubt else "#fa4646"
     text = "●"
     return f'<span style="font-size:60px; color:{color};text-shadow:0 0 10px {color}">{text}</span>'
 
+
 @app.route('/parkinglogo.jpg')
 def logo_image():
-    return send_from_directory(os.path.dirname(__file__), 'parkinglogo.jpg')
+    return send_from_directory(BASE_DIR, 'parkinglogo.jpg')
+
 
 @app.route('/')
 def index():
@@ -60,7 +72,7 @@ def index():
         <hr>
         <form method="post" action="/simulate_recognize">
             <label>
-                Neues Kennzeichen simulieren: 
+                Neues Kennzeichen simulieren:
                 <input name="kennzeichen" required>
             </label>
             <button type="submit" class="btn">Erkennen</button>
@@ -84,30 +96,26 @@ def index():
     </body>
     </html>
     """,
-    zufahrt_erlaubt=zufahrt_erlaubt,
+    zufahrt_erlaubt=state.zufahrt_erlaubt,
     led=led_html(),
-    letztes=letztes_kennzeichen,
-    log=log[::-1],
+    letztes=state.letztes_kennzeichen,
+    log=state.log[::-1],
     time=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
 
 @app.route('/toggle', methods=['POST'])
 def toggle():
-    global zufahrt_erlaubt
-    zufahrt_erlaubt = not zufahrt_erlaubt
+    state.zufahrt_erlaubt = not state.zufahrt_erlaubt
     return redirect('/')
+
 
 @app.route('/simulate_recognize', methods=['POST'])
 def simulate_recognize():
-    global letztes_kennzeichen
     kenn = request.form['kennzeichen'].strip().upper()
-    erlaubt = kenn in erlaubte_kennzeichen and zufahrt_erlaubt
-    letztes_kennzeichen = kenn
-    log.append({
-        "kennzeichen": kenn,
-        "zeit": datetime.now().strftime("%H:%M:%S"),
-        "erlaubt": erlaubt
-    })
+    erlaubt = kenn in erlaubte_kennzeichen and state.zufahrt_erlaubt
+    state.add_event(kenn, erlaubt)
     return redirect('/')
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
@@ -155,6 +163,7 @@ def admin():
     </div>
     </body></html>
     """, erlaubt=sorted(erlaubte_kennzeichen), msg=msg)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

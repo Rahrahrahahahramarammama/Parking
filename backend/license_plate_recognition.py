@@ -17,6 +17,7 @@ from backend.database import (
 )
 from backend.camera_module import Camera
 from backend.display_control import show_access, setup_leds, cleanup_leds
+from backend.status import state
 
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'license_plate_detector.pt'))
 reader = easyocr.Reader(['en'], gpu=False)
