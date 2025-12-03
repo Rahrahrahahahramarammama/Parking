@@ -17,29 +17,41 @@ from backend.database import (
 )
 from backend.camera_module import Camera
 from backend.display_control import show_access, setup_leds, cleanup_leds
-from backend.status import state
+from backend.status import state  # gemeinsamer Status
 
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'license_plate_detector.pt'))
+# ANPASSEN: Wo liegt dein .pt-File?
+# Variante A: Datei liegt in Parking/
+model_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'license_plate_detector.pt')
+)
+# Variante B, falls in backend/:   model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'license_plate_detector.pt'))
+
 reader = easyocr.Reader(['en'], gpu=False)
 model = YOLO(model_path)
+
 
 def crop_eu_blue_strip(plate_img, ratio=0.15):
     h, w = plate_img.shape[:2]
     crop_x = int(w * ratio)
     return plate_img[:, crop_x:]
 
+
 def scale_plate(img, target_height=180):
     h, w = img.shape[:2]
     scale = target_height / h
     return cv2.resize(img, (int(w * scale), target_height), interpolation=cv2.INTER_CUBIC)
 
+
 def preprocess_for_ocr(plate_img):
     gray = cv2.cvtColor(plate_img, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     denoised = cv2.bilateralFilter(enhanced, 9, 75, 75)
-    _, binarized = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, binarized = cv2.threshold(
+        denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )
     return binarized
+
 
 def ocr_easyocr_only(image):
     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -51,13 +63,16 @@ def ocr_easyocr_only(image):
     text = re.sub(r'[^A-Z0-9]', '', text.strip().upper())[:10]
     return text
 
+
 def plausible_plate(text):
     return 5 <= len(text) <= 10
+
 
 def trim_ghost_endings(text):
     while len(text) > 6 and text[-1] in "IZ1Q":
         text = text[:-1]
     return text
+
 
 def find_similar_plate_in_db(plate, max_distance=1):
     plates = get_all_license_plates()
@@ -66,6 +81,7 @@ def find_similar_plate_in_db(plate, max_distance=1):
         if dist <= max_distance:
             return known_plate
     return None
+
 
 def recognize_license_plate(img, show_debug=False):
     results = model(img)
@@ -93,6 +109,7 @@ def recognize_license_plate(img, show_debug=False):
             text = ocr_easyocr_only(plate_img_processed)
             text = trim_ghost_endings(text)
             final_plate = text
+
             if plausible_plate(final_plate):
                 similar_plate = find_similar_plate_in_db(final_plate, max_distance=1)
                 if similar_plate:
@@ -100,19 +117,30 @@ def recognize_license_plate(img, show_debug=False):
                         print(f"Ähnliches Kennzeichen gefunden, übernehme: {similar_plate}")
                     final_plate = similar_plate
 
-                print("="*40)
+                print("=" * 40)
                 print(f"Final erkanntes Kennzeichen: {final_plate}")
-                print("="*40)
+                print("=" * 40)
                 auto_add_user_license_plate(final_plate)
-                # Status in DB prüfen (vereinfachtes Bsp: Zugelassen = schon in DB)
-                zugelassen = True  # Passe dies nach DB-Logik an!
+
+                zugelassen = True  # vorerst alles OK
+
+                # wichtig: Event für Website
+                state.add_event(final_plate, zugelassen)
+                print("LOG-EVENT:", final_plate, zugelassen, "Einträge:", len(state.log))
+
                 show_access("allowed" if zugelassen else "denied", final_plate)
             else:
                 if show_debug:
                     print("Kein plausibles Kennzeichen erkannt.")
                 show_access("denied", text)
+
+                if text:
+                    state.add_event(text, False)
+                    print("LOG-EVENT (unplausibel):", text, False, "Einträge:", len(state.log))
+
     if show_debug:
         cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     create_tables()
