@@ -145,7 +145,7 @@ def recognize_license_plate(img, show_debug=False):
 if __name__ == "__main__":
     create_tables()
     setup_leds()
-    camera = Camera()
+    camera = Camera(cam_id=0)   # hier explizit 0 setzen
     try:
         while True:
             frame = camera.get_frame()
@@ -161,3 +161,4 @@ if __name__ == "__main__":
         cleanup_leds()
         camera.release()
         cv2.destroyAllWindows()
+
