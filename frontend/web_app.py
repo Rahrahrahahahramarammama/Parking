@@ -1,6 +1,7 @@
 import os
 import sys
 import sqlite3
+import re
 from functools import wraps
 from datetime import datetime, date, timedelta
 from urllib.parse import urlparse
@@ -406,8 +407,8 @@ def init_tables():
 
 
 def normalize_plate(p: str) -> str:
-    return (p or "").strip().upper()
-
+         """Konsistent mit main.py: entfernt Bindestriche, Leerzeichen etc."""
+         return re.sub(r"[^A-Z0-9]", "", (p or "").strip().upper())
 
 def get_allowed_flag(plate: str) -> int:
     plate = normalize_plate(plate)

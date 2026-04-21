@@ -1,77 +1,101 @@
+import os
+import re
 import sqlite3
+from datetime import datetime
 
-DB_NAME = 'smartpark.db'
+HERE     = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(HERE, ".."))
+DB_PATH  = os.path.join(ROOT_DIR, "parking.db")
 
-def create_tables():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    # Users table: alle Kennzeichen im System + Passwort
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            license_plate TEXT PRIMARY KEY,
-            password TEXT NOT NULL
+
+def get_db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def normalize_plate(text: str) -> str:
+    """Entfernt alle Nicht-Buchstaben/Ziffern, Grossbuchstaben.
+    Konsistent mit main.py UND web_app.py (nach dem Fix)."""
+    return re.sub(r"[^A-Z0-9]", "", (text or "").strip().upper())
+
+
+def create_tables() -> None:
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS allowedplates (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            plate TEXT UNIQUE NOT NULL
         )
-    ''')
-    # Reservations table (optional für Park-Reservationen)
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS reservations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            license_plate TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
-            FOREIGN KEY (license_plate) REFERENCES users (license_plate)
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS parkingevents (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            plate     TEXT    NOT NULL,
+            direction TEXT    NOT NULL,
+            timestamp TEXT    NOT NULL,
+            allowed   INTEGER NOT NULL DEFAULT 0
         )
-    ''')
-    # Parking spots table (optional für belegte Plätze)
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS parking_spots (
-            spot_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            license_plate TEXT,
-            occupied INTEGER DEFAULT 0,
-            FOREIGN KEY (license_plate) REFERENCES users (license_plate)
-        )
-    ''')
+    """)
     conn.commit()
     conn.close()
 
-def add_user(license_plate, password):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    try:
-        c.execute('INSERT OR IGNORE INTO users (license_plate, password) VALUES (?, ?)', (license_plate, password))
-        conn.commit()
-        if c.rowcount == 0:
-            print(f"Kennzeichen {license_plate} war bereits im System.")
-        else:
-            print(f"Kennzeichen {license_plate} wurde registriert.")
-    except sqlite3.Error as e:
-        print("Fehler beim Speichern:", e)
-    finally:
-        conn.close()
 
-def auto_add_user_license_plate(plate, default_password="autogen"):
-    add_user(plate, default_password)
-
-def check_user(license_plate):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT * FROM users WHERE license_plate = ?', (license_plate,))
-    user = c.fetchone()
+def is_allowed_plate(plate: str) -> bool:
+    plate = normalize_plate(plate)
+    if not plate:
+        return False
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("SELECT 1 FROM allowedplates WHERE plate = ?", (plate,))
+    result = cur.fetchone() is not None
     conn.close()
-    return user is not None
+    return result
 
-def get_all_license_plates():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('SELECT license_plate FROM users')
-    plates = [row[0] for row in c.fetchall()]
+
+def get_allowed_plates() -> list:
+    """Nur aus allowedplates (nie aus Event-History!)."""
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("SELECT plate FROM allowedplates")
+    plates = [normalize_plate(row["plate"]) for row in cur.fetchall()]
     conn.close()
-    return plates
+    return [p for p in plates if 5 <= len(p) <= 10]
 
-# Optional: Weitere Funktionen für Reservationen und Parkplätze etc. möglich
+
+def log_event(plate: str, direction: str, allowed: bool) -> None:
+    plate = normalize_plate(plate)
+    if not plate:
+        return
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute(
+        "INSERT INTO parkingevents (plate, direction, timestamp, allowed) VALUES (?, ?, ?, ?)",
+        (plate, direction, datetime.now().isoformat(timespec="seconds"), int(allowed)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_last_event(plate: str):
+    plate = normalize_plate(plate)
+    if not plate:
+        return None
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("""
+        SELECT id, plate, direction, timestamp, allowed
+        FROM   parkingevents
+        WHERE  plate = ?
+        ORDER  BY datetime(timestamp) DESC
+        LIMIT  1
+    """, (plate,))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
 
 if __name__ == "__main__":
     create_tables()
-    print("DB-Struktur angelegt oder geprüft. Beispiel-Platteneintrag:")
-    add_user("TEST123", "autogen")
-    print("Alle gespeicherten Kennzeichen:", get_all_license_plates())
+    print("DB OK:", DB_PATH)
